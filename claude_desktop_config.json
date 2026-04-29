@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mtb-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/Users/awmatheson/projects/dh-mcp",
+        "mtb-mcp-server"
+      ],
+      "env": {
+        "MTB_CACHE_DB": "/Users/awmatheson/.cache/mtb-mcp/cache.db"
+      }
+    }
+  }
+}
