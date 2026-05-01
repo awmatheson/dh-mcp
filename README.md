@@ -61,7 +61,11 @@ All tools return JSON strings. Search uses rootsandrain's `/ajax/riders` JSON au
 | `season_standings` | `year`, `series?`, `category?`, `top?` | Aggregated per-rider season standings ranked by points |
 | `get_rider_stats` | `rider_id`, `rider_slug`, `year?` | Wins / podiums / top10s / avg position + per-year breakdown |
 | `compare_riders` | `riders` (list of `{rider_id, rider_slug, name?}`), `year?` | Side-by-side stats sorted by avg position |
-| `get_pinkbike_fantasy_catalog` | `refresh?` | Pinkbike DH Fantasy League riders + costs (requires sync, see below) |
+| `get_pinkbike_fantasy_catalog` | `refresh?` | Pinkbike fantasy riders + costs + injury flags (public, no auth) |
+| `get_my_pinkbike_team` | `refresh?` | Your 6 currently picked riders (requires curl-file auth) |
+| `get_pinkbike_news` | `query`, `max_results?` | Pinkbike news articles tagged with a rider/team/topic |
+| `get_recent_dh_news` | `max_results?` | DH category news index (recent articles) |
+| `get_reddit_mtb_mentions` | `query`, `max_results?`, `timeframe?` | /r/mtb posts mentioning a rider |
 | `get_cache_stats` | — | DB path, row counts, byte sizes, fetch timestamps |
 | `invalidate_current_season_cache` | — | Wipe current-season + untagged cache entries |
 
@@ -83,21 +87,32 @@ To add a series: append a row to `REGIONAL_DH_SERIES` in `src/mtb_mcp/scraper.py
 
 ## Pinkbike Fantasy League integration
 
-`get_pinkbike_fantasy_catalog` returns the official Pinkbike rider list with current salaries and carryover points. Pinkbike's edit-team page requires login, so the workflow is one-time auth via "Copy as cURL":
+Two tools, two sources:
+
+### `get_pinkbike_fantasy_catalog` — public, no auth
+
+Pulls the public athletes page (`/contest/fantasy/dh/athletes/`). All 97 riders with current salaries, season points, gender, and an **injury flag**. Pinkbike updates pricing after each round; pass `refresh=true` or run the sync script to refresh.
+
+### `get_my_pinkbike_team` — requires login
+
+Returns the 6 riders you've currently picked. Auth via "Copy as cURL":
 
 1. Log in at https://www.pinkbike.com
 2. Open https://www.pinkbike.com/contest/fantasy/dh/editteam/
-3. Devtools → Network tab → reload the page → right-click the `editteam/` request → Copy → Copy as cURL
-4. Paste into `.local/pinkbike_curl.txt` (the `.local/` directory is gitignored)
-5. Run the sync script:
+3. Devtools → Network tab → reload → right-click the `editteam/` request → Copy → Copy as cURL
+4. Paste into `.local/pinkbike_curl.txt` (gitignored)
+
+Pinkbike has two display states for your team and the tool handles both: editable (between rounds) and locked (during a race weekend, where it follows the `?teamid=N` link to the team-profile page).
+
+### Sync script
 
 ```bash
-uv run python scripts/sync_pinkbike_catalog.py
+uv run python scripts/sync_pinkbike_catalog.py            # both catalog + team
+uv run python scripts/sync_pinkbike_catalog.py --no-team  # catalog only (no auth needed)
+uv run python scripts/sync_pinkbike_catalog.py --show 0   # show full lists
 ```
 
-That populates the cache. The MCP tool reads from the cache, so once synced, Claude can ask for `get_pinkbike_fantasy_catalog` instantly.
-
-**When to re-sync:** Pinkbike updates rider prices after every World Cup round. Re-run the script after each race weekend (or whenever you see stale prices). Cookies typically last weeks; if the script reports an auth error, refresh the curl file.
+Re-run after each World Cup round to refresh dynamic prices. The catalog half works without the curl file; the team half is skipped gracefully if it's missing.
 
 **Combining with `season_standings` for fantasy research:** the two tools together give you costs (from Pinkbike) + form (from rootsandrain) — exactly what's needed to identify dynamic-pricing arbitrage, e.g. riders priced off 2025 standings who are showing 2026 form before round 1.
 

@@ -230,16 +230,18 @@ def get_reddit_mtb_mentions(
 
 @mcp.tool()
 def get_pinkbike_fantasy_catalog(refresh: bool = False) -> str:
-    """Pinkbike DH Fantasy League rider catalog: name, cost, gender, points.
+    """Pinkbike DH Fantasy League rider catalog: name, cost, gender, points, injury.
 
-    Returns the riders in the official Pinkbike picker with their current
-    salaries (`cost`) and previous-season carryover points (`points`). Pricing
-    is dynamic — Pinkbike updates after every round — so re-run
-    `scripts/sync_pinkbike_catalog.py` after each World Cup race weekend to
-    refresh.
+    Sourced from the public athletes page (no auth). Each rider has:
+      - cost: current salary in USD
+      - points: season points to date
+      - gender: male / female
+      - injured: True if Pinkbike has flagged the rider as injured
+      - pinkbike_id: stable Pinkbike rider id
 
-    Set `refresh=true` to skip the local cache and re-parse from the saved
-    auth file (`.local/pinkbike_curl.txt`).
+    Pinkbike updates pricing after every round — re-run
+    `scripts/sync_pinkbike_catalog.py` (or pass `refresh=true`) after each
+    World Cup race weekend.
     """
     riders = pinkbike.get_fantasy_catalog(refresh=refresh)
     men = sorted(
@@ -248,13 +250,44 @@ def get_pinkbike_fantasy_catalog(refresh: bool = False) -> str:
     women = sorted(
         [r for r in riders if r.gender == "female"], key=lambda r: -(r.cost or 0)
     )
+    injured = [r for r in riders if r.injured]
     return _dump(
         {
             "budget": 1_500_000,
             "team_size": {"men": 4, "women": 2},
             "rider_count": len(riders),
+            "injured_count": len(injured),
+            "injured": [r.__dict__ for r in injured],
             "men": [r.__dict__ for r in men],
             "women": [r.__dict__ for r in women],
+        }
+    )
+
+
+@mcp.tool()
+def get_my_pinkbike_team(refresh: bool = False) -> str:
+    """The user's currently picked 6 fantasy riders.
+
+    Requires .local/pinkbike_curl.txt (a 'Copy as cURL' file from a
+    logged-in browser request to /contest/fantasy/dh/editteam/). Returns the
+    picks with cost and gender so the caller knows what's currently on the
+    team. Use together with `get_pinkbike_fantasy_catalog` to evaluate swaps.
+    """
+    try:
+        team = pinkbike.get_my_pinkbike_team(refresh=refresh)
+    except FileNotFoundError as e:
+        return _dump({"error": "no_curl_file", "message": str(e)})
+    except Exception as e:
+        return _dump({"error": "auth_or_parse_failure", "message": str(e)})
+
+    total = sum((r.cost or 0) for r in team)
+    return _dump(
+        {
+            "budget": 1_500_000,
+            "spent": total,
+            "remaining": 1_500_000 - total,
+            "men": [r.__dict__ for r in team if r.gender == "male"],
+            "women": [r.__dict__ for r in team if r.gender == "female"],
         }
     )
 
