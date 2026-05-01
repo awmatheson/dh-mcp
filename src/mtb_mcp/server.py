@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import cache, news, pinkbike, scraper
+from . import cache, chronorace, news, pinkbike, scraper
 
 mcp = FastMCP("mtb-mcp")
 
@@ -189,6 +189,59 @@ def compare_riders(
         )
     )
     return _dump({"year_filter": year, "riders": rows})
+
+
+@mcp.tool()
+def list_chronorace_runs(date_iso: str, max_key: int = 20) -> str:
+    """Discover active ChronoRace timing runs for a UCI DH event date.
+
+    `date_iso` is the YYYY-MM-DD date the event starts (e.g. round 1 of 2026
+    is "2026-05-01"). For each non-null `key` value, returns the run name
+    (Qualification 1, Final, etc), rider count, and live state — use this to
+    figure out which key to pass to `get_chronorace_run`.
+
+    Live data only exists during race weekends; off-weeks return empty.
+    """
+    db = chronorace.db_for_date(date_iso)
+    runs = chronorace.list_runs(db, max_key=max_key)
+    return _dump({"db": db, "date_iso": date_iso, "runs": [r.__dict__ for r in runs]})
+
+
+@mcp.tool()
+def get_chronorace_run(date_iso: str, key: int, top: int | None = None) -> str:
+    """Live timing for a specific UCI DH run.
+
+    `date_iso` = event start date (YYYY-MM-DD), `key` = run identifier from
+    `list_chronorace_runs`. Returns:
+      - DisplayName ("Qualification 1", "Final", etc.)
+      - All finishers with cumulative time, gap to leader, sector splits
+      - On-track riders (currently racing)
+      - Next to start (queued)
+      - Last finisher
+
+    During an active race the data refreshes every few seconds. Pass `top`
+    to limit the results array to the top N positions for compact output.
+    """
+    db = chronorace.db_for_date(date_iso)
+    run = chronorace.get_run(db, key)
+
+    def serialize(rt: chronorace.RiderTime) -> dict:
+        return {**rt.__dict__, "splits": [s.__dict__ for s in rt.splits]}
+
+    results = run.results[:top] if top else run.results
+    return _dump(
+        {
+            "db": run.db,
+            "key": run.key,
+            "display_name": run.display_name,
+            "rider_count": run.rider_count,
+            "fetched_at": run.fetched_at,
+            "on_track": [serialize(r) for r in run.on_track],
+            "next_to_start": [serialize(r) for r in run.next_to_start],
+            "last_finishers": [serialize(r) for r in run.last_finishers],
+            "results": [serialize(r) for r in results],
+        }
+    )
 
 
 @mcp.tool()

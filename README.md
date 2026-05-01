@@ -61,6 +61,8 @@ All tools return JSON strings. Search uses rootsandrain's `/ajax/riders` JSON au
 | `season_standings` | `year`, `series?`, `category?`, `top?` | Aggregated per-rider season standings ranked by points |
 | `get_rider_stats` | `rider_id`, `rider_slug`, `year?` | Wins / podiums / top10s / avg position + per-year breakdown |
 | `compare_riders` | `riders` (list of `{rider_id, rider_slug, name?}`), `year?` | Side-by-side stats sorted by avg position |
+| `list_chronorace_runs` | `date_iso`, `max_key?` | Active live-timing runs for a UCI DH event date (Q1, Q2, Final, etc.) |
+| `get_chronorace_run` | `date_iso`, `key`, `top?` | Live splits/positions for a single run, refreshed each call |
 | `get_pinkbike_fantasy_catalog` | `refresh?` | Pinkbike fantasy riders + costs + injury flags (public, no auth) |
 | `get_my_pinkbike_team` | `refresh?` | Your 6 currently picked riders (requires curl-file auth) |
 | `get_pinkbike_news` | `query`, `max_results?` | Pinkbike news articles tagged with a rider/team/topic |
@@ -84,6 +86,16 @@ All tools return JSON strings. Search uses rootsandrain's `/ajax/riders` JSON au
 Series IDs are resolved at runtime via rootsandrain's `/ajax/search` endpoint — rootsandrain mints a new id per year, so there's no hardcoded table to maintain.
 
 To add a series: append a row to `REGIONAL_DH_SERIES` in `src/mtb_mcp/scraper.py`. Use `pure_dh: True` if the series only runs DH events; `False` if it runs mixed disciplines (the keyword filter then drops non-DH events).
+
+## ChronoRace live timing
+
+`list_chronorace_runs` and `get_chronorace_run` pull live UCI DH timing data from the unauthenticated JSON endpoint behind ChronoRace's Angular results app. During a race weekend you can see splits, current positions, on-track riders, next-to-start, and last-finishers in near-real-time (the underlying SPA polls every 2-3s).
+
+The endpoint URL pattern is `https://prod.chronorace.be/api/results/generic/uci/{db}/dh?key={key}`. We expose it via:
+- `db` derived from `date_iso` — round 1 of 2026 → `20260501_mtb`
+- `key` discovered via `list_chronorace_runs` (different keys for Men Elite Q1, Women Elite Q1, Final, etc.)
+
+Per-rider data includes UCI rider id, World Cup rank, team, sector splits with gap-to-leader at each split, an injury flag, and the bottom-of-course speed. Useful for race-day dashboards and post-run analysis.
 
 ## Pinkbike Fantasy League integration
 
