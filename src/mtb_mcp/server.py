@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import cache, chronorace, news, pinkbike, scraper
+from . import cache, chronorace, news, pinkbike, scraper, vital
 
 mcp = FastMCP("mtb-mcp")
 
@@ -242,6 +242,39 @@ def get_chronorace_run(date_iso: str, key: int, top: int | None = None) -> str:
             "results": [serialize(r) for r in results],
         }
     )
+
+
+@mcp.tool()
+def list_vital_videos(
+    query: str | None = None,
+    max_results: int = 15,
+    pages: int = 1,
+    raw_only: bool = False,
+) -> str:
+    """List recent Vital MTB videos with metadata (no transcription/OCR).
+
+    Useful for surfacing "watch this run" links next to race results — Vital
+    RAW publishes raw run footage from World Cup DH and regional events.
+
+    `query` filters by venue/rider/event name (case-insensitive substring of
+    title or slug). `raw_only` restricts to Vital RAW-tagged videos. Each
+    page of the index is ~40 videos.
+    """
+    items = vital.list_videos(
+        query=query, max_results=max_results, pages=pages, raw_only=raw_only
+    )
+    return _dump([v.__dict__ for v in items])
+
+
+@mcp.tool()
+def get_vital_video(url_or_slug: str) -> str:
+    """Fetch a Vital MTB video detail page (og:title, og:description, og:image).
+
+    Accepts a full URL, a relative path like /videos/features/..., or a bare
+    slug. Use after `list_vital_videos` to get a richer summary for a video
+    you care about.
+    """
+    return _dump(vital.get_video(url_or_slug).__dict__)
 
 
 @mcp.tool()

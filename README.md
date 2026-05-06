@@ -63,6 +63,8 @@ All tools return JSON strings. Search uses rootsandrain's `/ajax/riders` JSON au
 | `compare_riders` | `riders` (list of `{rider_id, rider_slug, name?}`), `year?` | Side-by-side stats sorted by avg position |
 | `list_chronorace_runs` | `date_iso`, `max_key?` | Active live-timing runs for a UCI DH event date (Q1, Q2, Final, etc.) |
 | `get_chronorace_run` | `date_iso`, `key`, `top?` | Live splits/positions for a single run, refreshed each call |
+| `list_vital_videos` | `query?`, `max_results?`, `pages?`, `raw_only?` | Vital MTB videos (Vital RAW + features), filtered by venue/rider |
+| `get_vital_video` | `url_or_slug` | Detail page metadata (og:title, og:description, og:image) for a single Vital video |
 | `get_pinkbike_fantasy_catalog` | `refresh?` | Pinkbike fantasy riders + costs + injury flags (public, no auth) |
 | `get_my_pinkbike_team` | `refresh?` | Your 6 currently picked riders (requires curl-file auth) |
 | `get_pinkbike_news` | `query`, `max_results?` | Pinkbike news articles tagged with a rider/team/topic |
