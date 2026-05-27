@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from . import cache, chronorace, news, pinkbike, scraper, vital
+from . import cache, chronorace, news, pinkbike, scraper, vital, weather
 
 mcp = FastMCP("mtb-mcp")
 
@@ -189,6 +189,74 @@ def compare_riders(
         )
     )
     return _dump({"year_filter": year, "riders": rows})
+
+
+@mcp.tool()
+def get_race_weather(event_id: str, event_slug: str) -> str:
+    """Forecast (upcoming) or historical (past) weather for a race day.
+
+    Looks at race day + previous day to capture slick-track conditions.
+    Returns a `classification` of "wet" | "dry" | "unknown" plus the daily
+    precipitation breakdown. Open-Meteo, no API key.
+    """
+    events = scraper.list_uci_dh_events()
+    event = next(
+        (e for e in events if e.event_id == event_id and e.slug == event_slug),
+        None,
+    )
+    if event is None:
+        # Construct a minimal EventInfo from regional series if not found.
+        events_all = []
+        for entry in scraper.REGIONAL_DH_SERIES:
+            try:
+                yr = (event_slug.split("-")[0] if event_slug else "2026")
+                events_all.extend(
+                    scraper.list_series_dh_events(
+                        entry["query"], int(yr), pure_dh=entry.get("pure_dh", False)
+                    )
+                )
+            except Exception:
+                continue
+        event = next(
+            (e for e in events_all if e.event_id == event_id), None
+        )
+    if event is None:
+        return _dump({"error": "event not found", "event_id": event_id})
+
+    rw = weather.race_weather(event)
+    return _dump({
+        **{k: v for k, v in rw.__dict__.items() if k != "days"},
+        "days": [d.__dict__ for d in rw.days],
+    })
+
+
+@mcp.tool()
+def find_rain_specialists(
+    year: int,
+    category: str = "Male Elite",
+    series: str = "uci",
+    top: int = 10,
+    min_wet_races: int = 2,
+    min_dry_races: int = 2,
+) -> str:
+    """Find riders whose median position is meaningfully better in wet races.
+
+    Classifies each event in the series as wet/dry via Open-Meteo, then
+    buckets each rider's finishes. Sorted by `delta` (dry_median - wet_median)
+    descending — positive delta = better in the wet.
+
+    `min_wet_races` / `min_dry_races` filter out riders with too small a
+    sample. Defaults expect a full WC season.
+    """
+    riders = weather.find_rain_specialists(
+        year=year, category=category, series=series,
+        top=top, min_wet_races=min_wet_races, min_dry_races=min_dry_races,
+    )
+    return _dump({
+        "year": year, "category": category, "series": series,
+        "count": len(riders),
+        "riders": [r.__dict__ for r in riders],
+    })
 
 
 @mcp.tool()
